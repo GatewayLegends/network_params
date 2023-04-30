@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'com.gateway.networkparams'
+    namespace 'com.gateway.networkparams_app'
     compileSdk 33
 
     defaultConfig {
-        applicationId "com.gateway.networkparams"
+        applicationId "com.gateway.networkparams_app"
         minSdk 24
         targetSdk 33
         versionCode 1

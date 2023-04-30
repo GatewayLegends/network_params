@@ -1,4 +1,4 @@
-package com.gateway.networkparams
+package com.gateway.networkparams_app
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity

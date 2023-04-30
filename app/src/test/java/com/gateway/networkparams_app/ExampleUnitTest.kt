@@ -1,4 +1,4 @@
-package com.gateway.networkparams
+package com.gateway.networkparams_app
 
 import org.junit.Test
 
