@@ -128,7 +128,8 @@ internal class MNetworkRegistrationInfo(
         "isEmergencyEnabled" to isEmergencyEnabled
     )
 
-
+    private fun CellIdentity.getLteOrNull() =
+        if (this is CellIdentityLte) MCellIdentityLte(this) else null
 
     data class NetworkRegistrationInfoReflection(
         @SerializedName("getConfigRadioTechnology") val configRadioTechnology: Int,
