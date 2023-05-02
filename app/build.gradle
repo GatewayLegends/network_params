@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'com.gateway.networkparams_app'
+    namespace 'com.gateway.networkparams'
     compileSdk 33
 
     defaultConfig {
-        applicationId "com.gateway.networkparams_app"
+        applicationId "com.gateway.networkparams"
         minSdk 24
         targetSdk 33
         versionCode 1
@@ -33,6 +33,7 @@ android {
 }
 
 dependencies {
+    api project(path: ':networkParams')
 
     implementation 'androidx.core:core-ktx:1.10.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
