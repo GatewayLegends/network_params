@@ -2,6 +2,8 @@ package com.gateway.networkparam.framework.util
 
 import android.Manifest
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.telephony.*
 import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
@@ -11,8 +13,9 @@ import com.gateway.networkparam.entity.CellLte
 import com.gateway.networkparam.entity.util.isTrue
 import com.gateway.networkparam.repository.util.toEntity
 import com.gateway.networkparam.repository.util.toLte
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.concurrent.Executor
+import kotlin.coroutines.resume
 
 fun TelephonyManager.getSubTelephonyManager(subId: Int): TelephonyManager =
     createForSubscriptionId(subId)
@@ -34,85 +37,141 @@ fun TelephonyManager.getSignalStrengthLte() =
 
 @RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
 @RequiresApi(Build.VERSION_CODES.Q)
-suspend fun TelephonyManager.getUpdatedCellLte(executor: Executor): List<CellLte> {
+internal suspend fun TelephonyManager.getUpdatedCellLte(
+    executor: Executor,
+    updates: Int = 10,
+    updateIntervalMillis: Long = 500L
+): List<CellLte> = suspendCancellableCoroutine { continuation ->
+    var updateCounter = 0
     var isRegistered: Boolean
-    var isCompleted = true
     var networkOperator: String? = null
-    val cellLte = mutableListOf<CellLte>()
+    val cellsLte = mutableListOf<CellLte>()
+    val delayHandler = Handler(Looper.getMainLooper())
     val cellInfoCallback = object : TelephonyManager.CellInfoCallback() {
         override fun onCellInfo(cellInfo: MutableList<CellInfo>) {
-            isCompleted = false
-            cellLte.clear()
-            cellInfo.forEach {
-                it.toLte()?.let { lteCell ->
-                    val mLteCell = MCellInfoLte(lteCell)
+            if (updateCounter != updates) return
 
-                    if (mLteCell.isRegistered.isTrue || (mLteCell.cellIdentity.ci != null && mLteCell.cellIdentity.ci != 0)) {
-                        networkOperator = mLteCell.cellIdentity.networkOperator
-                        isRegistered = true
-                    } else {
-                        isRegistered = false
-                    }
+            cellInfo.map { it.toLte() }.forEach {
+                if (it == null) return@forEach
+                val cell = MCellInfoLte(it)
 
-                    if (mLteCell.cellIdentity.networkOperator == null) {
-                        val entityWithPinnedMccMnc = networkOperator?.let { networkOperator ->
-                            mLteCell.toEntity(networkOperator = networkOperator)
-                        }
-                        entityWithPinnedMccMnc?.let { report ->
-                            cellLte.add(report)
-                        }
-                    } else if (isRegistered) {
-                        cellLte.add(mLteCell.toEntity(isRegistered = true))
-                    } else cellLte.add(mLteCell.toEntity())
-                }
+                isRegistered =
+                    if (cell.isRegistered.isTrue || cell.cellIdentity.ci !in arrayOf(null, 0))
+                        true.also { networkOperator = cell.cellIdentity.networkOperator }
+                    else false
+
+                if (cell.cellIdentity.networkOperator == null)
+                    networkOperator?.run { cellsLte.add(cell.toEntity(networkOperator = this)) }
+                else if (isRegistered)
+                    cellsLte.add(cell.toEntity(isRegistered = true))
+                else
+                    cellsLte.add(cell.toEntity())
             }
-            isCompleted = true
         }
     }
 
-    var tries = 0
-    while (tries < 10) {
-        if (isCompleted) {
-            requestCellInfoUpdate(executor, cellInfoCallback)
-
-            tries++
-        }
-        delay(500)
+    fun scheduleNextUpdate() {
+        if (updateCounter < updates)
+            delayHandler.postDelayed({
+                requestCellInfoUpdate(executor, cellInfoCallback)
+                updateCounter++
+            }, updateIntervalMillis)
+        else
+            continuation.resume(cellsLte)
     }
 
-    return cellLte
+    continuation.invokeOnCancellation {
+        delayHandler.removeCallbacksAndMessages(null)
+    }
+
+    scheduleNextUpdate()
 }
 
 @RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-fun TelephonyManager.getCachedCellLte(): List<CellLte> {
-    val list = mutableListOf<CellLte>()
-
-    var networkOperator: String? = null
+internal fun TelephonyManager.getCachedCellLte(): List<CellLte> {
     var isRegistered: Boolean
+    var networkOperator: String? = null
+    val cellsLte = mutableListOf<CellLte>()
 
-    allCellInfo.forEach { cell ->
-        cell.toLte()?.let { lteCell ->
-            val mLteCell = MCellInfoLte(lteCell)
+    allCellInfo.map { it.toLte() }.forEach {
+        if (it == null) return@forEach
+        val cell = MCellInfoLte(it)
 
-            if (mLteCell.isRegistered.isTrue || (mLteCell.cellIdentity.ci != null && mLteCell.cellIdentity.ci != 0)) {
-                networkOperator = mLteCell.cellIdentity.networkOperator
-                isRegistered = true
-            } else {
-                isRegistered = false
+        isRegistered =
+            if (cell.isRegistered.isTrue || cell.cellIdentity.ci !in arrayOf(null, 0))
+                true.also { networkOperator = cell.cellIdentity.networkOperator }
+            else false
+
+        if (cell.cellIdentity.networkOperator == null)
+            networkOperator?.run { cellsLte.add(cell.toEntity(networkOperator = this)) }
+        else if (isRegistered)
+            cellsLte.add(cell.toEntity(isRegistered = true))
+        else
+            cellsLte.add(cell.toEntity())
+    }
+
+    return cellsLte
+}
+
+private val delayHandlers = mutableListOf<Handler>()
+
+@RequiresApi(Build.VERSION_CODES.Q)
+@RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+internal suspend fun TelephonyManager.requestCellLteUpdates(
+    executor: Executor,
+    updates: Int = 10,
+    updateIntervalMillis: Long = 1000L,
+    onUpdate: (List<CellLte>) -> Unit
+) = suspendCancellableCoroutine { continuation ->
+    var updateCounter = 0
+    var isRegistered: Boolean
+    var networkOperator: String? = null
+    val delayHandler = Handler(Looper.getMainLooper()).also(delayHandlers::add)
+    val cellInfoCallback = object : TelephonyManager.CellInfoCallback() {
+        override fun onCellInfo(cellInfo: MutableList<CellInfo>) {
+            val cellsLte = mutableListOf<CellLte>()
+            cellInfo.map { it.toLte() }.forEach {
+                if (it == null) return@forEach
+                val cell = MCellInfoLte(it)
+
+                isRegistered =
+                    if (cell.isRegistered.isTrue || cell.cellIdentity.ci !in arrayOf(null, 0))
+                        true.also { networkOperator = cell.cellIdentity.networkOperator }
+                    else false
+
+                if (cell.cellIdentity.networkOperator == null)
+                    networkOperator?.run { cellsLte.add(cell.toEntity(networkOperator = this)) }
+                else if (isRegistered)
+                    cellsLte.add(cell.toEntity(isRegistered = true))
+                else
+                    cellsLte.add(cell.toEntity())
             }
 
-            if (mLteCell.cellIdentity.networkOperator == null) {
-                val entityWithCustomMccMnc = networkOperator?.let {
-                    mLteCell.toEntity(networkOperator = it)
-                }
-                entityWithCustomMccMnc?.let {
-                    list.add(it)
-                }
-            } else if (isRegistered) {
-                list.add(mLteCell.toEntity(isRegistered = true))
-            } else list.add(mLteCell.toEntity())
+            if (cellsLte.isNotEmpty())
+                onUpdate(cellsLte)
         }
     }
 
-    return list
+    fun scheduleNextUpdate() {
+        if (updateCounter < updates)
+            delayHandler.postDelayed({
+                requestCellInfoUpdate(executor, cellInfoCallback)
+                updateCounter++
+            }, updateIntervalMillis)
+        else
+            continuation.resume(Unit)
+    }
+
+    continuation.invokeOnCancellation {
+        delayHandler.removeCallbacksAndMessages(null)
+        delayHandlers.remove(delayHandler)
+    }
+
+    scheduleNextUpdate()
+}
+
+@RequiresApi(Build.VERSION_CODES.Q)
+internal fun TelephonyManager.removeCellLteUpdates() = with(delayHandlers) {
+    forEach { it.removeCallbacksAndMessages(null) }
+    clear()
 }
