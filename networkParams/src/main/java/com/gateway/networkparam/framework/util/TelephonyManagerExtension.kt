@@ -17,18 +17,18 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 
-fun TelephonyManager.getSubTelephonyManager(subId: Int): TelephonyManager =
+internal fun TelephonyManager.getSubTelephonyManager(subId: Int): TelephonyManager =
     createForSubscriptionId(subId)
 
 @RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-suspend fun TelephonyManager.getCellLte(executor: Executor) =
+internal suspend fun TelephonyManager.getCellLte(executor: Executor) =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
         getUpdatedCellLte(executor)
     else
         getCachedCellLte()
 
 @RequiresApi(Build.VERSION_CODES.Q)
-fun TelephonyManager.getSignalStrengthLte() =
+internal fun TelephonyManager.getSignalStrengthLte() =
     signalStrength?.cellSignalStrengths?.find {
         it.toLte() != null
     }?.let(CellSignalStrength::toLte)
