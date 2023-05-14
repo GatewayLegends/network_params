@@ -21,7 +21,7 @@ internal class TelephonyDataSourceImp(
     private val context: Context,
 ) : TelephonyDataSource {
 
-    override lateinit var lastCellsLte: List<CellLte>
+    override var lastCellsLte: List<CellLte> = emptyList()
         private set
 
     @SuppressLint("MissingPermission")
@@ -35,7 +35,7 @@ internal class TelephonyDataSourceImp(
             updates = updates,
             executor = context.mainExecutor,
             updateIntervalMillis = updateIntervalMillis,
-            onUpdate = { lastCellsLte = it }
+            onUpdate = { lastCellsLte = it.also (onUpdate) }
         )
     }
 
