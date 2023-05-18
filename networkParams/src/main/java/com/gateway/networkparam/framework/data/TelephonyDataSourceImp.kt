@@ -7,6 +7,7 @@ import android.telephony.TelephonyManager
 import androidx.annotation.RequiresApi
 import com.gateway.networkparam.entity.CellLte
 import com.gateway.networkparam.entity.SignalStrengthLte
+import com.gateway.networkparam.entity.util.NetworkOperator
 import com.gateway.networkparam.framework.util.getAllSubTelephonyManagers
 import com.gateway.networkparam.framework.util.getCellLte
 import com.gateway.networkparam.framework.util.getExecutor
@@ -27,15 +28,21 @@ internal class TelephonyDataSourceImp(
     @SuppressLint("MissingPermission")
     @RequiresApi(Build.VERSION_CODES.Q)
     override suspend fun requestCellLteUpdates(
+        networkOperator: NetworkOperator,
         updates: Int,
         updateIntervalMillis: Long,
         onUpdate: (List<CellLte>) -> Unit
     ) = allTelephonyManager.forEach { telephonyManager ->
+        if (networkOperator.value != telephonyManager.simOperator)
+            return@forEach
+
         telephonyManager.requestCellLteUpdates(
             updates = updates,
             executor = context.mainExecutor,
             updateIntervalMillis = updateIntervalMillis,
-            onUpdate = { lastCellsLte = it.also (onUpdate) }
+            onUpdate = {
+                lastCellsLte = it.also(onUpdate)
+            }
         )
     }
 

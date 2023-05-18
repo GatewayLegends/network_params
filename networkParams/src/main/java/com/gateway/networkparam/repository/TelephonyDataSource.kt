@@ -4,6 +4,7 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import com.gateway.networkparam.entity.CellLte
 import com.gateway.networkparam.entity.SignalStrengthLte
+import com.gateway.networkparam.entity.util.NetworkOperator
 
 interface TelephonyDataSource {
     @get:RequiresApi(Build.VERSION_CODES.Q)
@@ -11,6 +12,7 @@ interface TelephonyDataSource {
 
     @RequiresApi(Build.VERSION_CODES.Q)
     suspend fun requestCellLteUpdates(
+        networkOperator: NetworkOperator,
         updates: Int = Int.MAX_VALUE,
         updateIntervalMillis: Long = 1000L,
         onUpdate: (List<CellLte>) -> Unit
