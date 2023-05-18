@@ -75,6 +75,7 @@ internal suspend fun TelephonyManager.getUpdatedCellLte(
             delayHandler.postDelayed({
                 requestCellInfoUpdate(executor, cellInfoCallback)
                 updateCounter++
+                scheduleNextUpdate()
             }, updateIntervalMillis)
         else
             continuation.resume(cellsLte)
@@ -157,6 +158,7 @@ internal suspend fun TelephonyManager.requestCellLteUpdates(
             delayHandler.postDelayed({
                 requestCellInfoUpdate(executor, cellInfoCallback)
                 updateCounter++
+                scheduleNextUpdate()
             }, updateIntervalMillis)
         else
             continuation.resume(Unit)
