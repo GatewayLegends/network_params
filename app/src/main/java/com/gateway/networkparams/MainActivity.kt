@@ -7,6 +7,7 @@ import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import com.gateway.networkparam.NetworkParams
 import com.gateway.networkparam.entity.CellLte
+import com.gateway.networkparam.entity.util.NetworkOperator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -31,7 +32,9 @@ class MainActivity : AppCompatActivity() {
     private suspend fun test(onUpdate: (List<CellLte>) -> Unit) {
         NetworkParams(this).telephonyDataSource().run {
             withContext(Dispatchers.IO) {
-                requestCellLteUpdates(onUpdate = { onUpdate(lastCellsLte) })
+                requestCellLteUpdates(
+                    networkOperator = NetworkOperator.Fastlink,
+                    onUpdate = { onUpdate(lastCellsLte) })
             }
         }
     }
