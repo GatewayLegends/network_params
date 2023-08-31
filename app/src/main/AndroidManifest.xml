@@ -9,6 +9,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:name=".NetworkParamsApplication"
         android:theme="@style/Theme.NetworkParams"
         tools:targetApi="31">
         <activity

@@ -17,6 +17,8 @@ import com.gateway.networkparam.framework.util.removeCellLteUpdates
 import com.gateway.networkparam.framework.util.requestCellLteUpdates
 import com.gateway.networkparam.framework.util.telephonyManager
 import com.gateway.networkparam.repository.TelephonyDataSource
+import com.gateway.networkparam.repository.util.isSim4GSupported
+
 
 internal class TelephonyDataSourceImp(
     private val context: Context,
@@ -32,18 +34,23 @@ internal class TelephonyDataSourceImp(
         updates: Int,
         updateIntervalMillis: Long,
         onUpdate: (List<CellLte>) -> Unit
-    ) = allTelephonyManager.forEach { telephonyManager ->
-        if (networkOperator.value != telephonyManager.simOperator)
-            return@forEach
+    ) {
+        allTelephonyManager.forEach { telephonyManager ->
 
-        telephonyManager.requestCellLteUpdates(
-            updates = updates,
-            executor = context.mainExecutor,
-            updateIntervalMillis = updateIntervalMillis,
-            onUpdate = {
-                lastCellsLte = it.also(onUpdate)
-            }
-        )
+            if (
+                (networkOperator.value != telephonyManager.simOperator)
+                || telephonyManager.isSim4GSupported.not()
+            ) return@forEach
+
+            telephonyManager.requestCellLteUpdates(
+                updates = updates,
+                executor = context.mainExecutor,
+                updateIntervalMillis = updateIntervalMillis,
+                onUpdate = {
+                    lastCellsLte = it.also(onUpdate)
+                }
+            )
+        }
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
