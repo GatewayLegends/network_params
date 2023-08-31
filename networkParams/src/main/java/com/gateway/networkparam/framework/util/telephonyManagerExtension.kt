@@ -1,26 +1,27 @@
 package com.gateway.networkparam.framework.util
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.telephony.*
 import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
-import com.gateway.networkparam.repository.dto.MCellInfoLte
-import com.gateway.networkparam.repository.dto.MCellSignalStrengthLte
 import com.gateway.networkparam.entity.CellLte
-import com.gateway.networkparam.entity.util.isTrue
+import com.gateway.networkparam.repository.dto.MCellSignalStrengthLte
 import com.gateway.networkparam.repository.util.toEntity
+import com.gateway.networkparam.repository.util.toImprovedLte
 import com.gateway.networkparam.repository.util.toLte
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 
+
 internal fun TelephonyManager.getSubTelephonyManager(subId: Int): TelephonyManager =
     createForSubscriptionId(subId)
 
-@RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+@RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.READ_PHONE_STATE])
 internal suspend fun TelephonyManager.getCellLte(executor: Executor) =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
         getUpdatedCellLte(executor)
@@ -35,89 +36,55 @@ internal fun TelephonyManager.getSignalStrengthLte() =
         ?.let(::MCellSignalStrengthLte)
         ?.toEntity(networkOperator)
 
-@RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
 @RequiresApi(Build.VERSION_CODES.Q)
+@RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.READ_PHONE_STATE])
 internal suspend fun TelephonyManager.getUpdatedCellLte(
     executor: Executor,
     updates: Int = 10,
     updateIntervalMillis: Long = 500L
 ): List<CellLte> = suspendCancellableCoroutine { continuation ->
     var updateCounter = 0
-    var isRegistered: Boolean
     var networkOperator: String? = null
-    val cellsLte = mutableListOf<CellLte>()
     val delayHandler = Handler(Looper.getMainLooper())
     val cellInfoCallback = object : TelephonyManager.CellInfoCallback() {
+        var cellsLte = listOf<CellLte>()
+        @SuppressLint("MissingPermission")
         override fun onCellInfo(cellInfo: MutableList<CellInfo>) {
-            if (updateCounter != updates) return
+            cellsLte = cellInfo.toImprovedLte(
+                defaultNetworkOperator = { networkOperator },
+                onNetworkOperator = { networkOperator = it }
+            )
 
-            cellInfo.map { it.toLte() }.forEach {
-                if (it == null) return@forEach
-                val cell = MCellInfoLte(it)
-
-                isRegistered =
-                    if (cell.isRegistered.isTrue || cell.cellIdentity.ci !in arrayOf(null, 0))
-                        true.also { networkOperator = cell.cellIdentity.networkOperator }
-                    else false
-
-                if (cell.cellIdentity.networkOperator == null)
-                    networkOperator?.run { cellsLte.add(cell.toEntity(networkOperator = this)) }
-                else if (isRegistered)
-                    cellsLte.add(cell.toEntity(isRegistered = true))
-                else
-                    cellsLte.add(cell.toEntity())
-            }
+            if (updateCounter < updates)
+                delayHandler.postDelayed({
+                    requestCellInfoUpdate(executor, this)
+                    updateCounter++
+                }, updateIntervalMillis)
+            else
+                continuation.resume(cellsLte)
         }
-    }
-
-    fun scheduleNextUpdate() {
-        if (updateCounter < updates)
-            delayHandler.postDelayed({
-                requestCellInfoUpdate(executor, cellInfoCallback)
-                updateCounter++
-                scheduleNextUpdate()
-            }, updateIntervalMillis)
-        else
-            continuation.resume(cellsLte)
     }
 
     continuation.invokeOnCancellation {
         delayHandler.removeCallbacksAndMessages(null)
     }
 
-    scheduleNextUpdate()
+    requestCellInfoUpdate(executor, cellInfoCallback)
 }
 
-@RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+@RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.READ_PHONE_STATE])
 internal fun TelephonyManager.getCachedCellLte(): List<CellLte> {
-    var isRegistered: Boolean
     var networkOperator: String? = null
-    val cellsLte = mutableListOf<CellLte>()
-
-    allCellInfo.map { it.toLte() }.forEach {
-        if (it == null) return@forEach
-        val cell = MCellInfoLte(it)
-
-        isRegistered =
-            if (cell.isRegistered.isTrue || cell.cellIdentity.ci !in arrayOf(null, 0))
-                true.also { networkOperator = cell.cellIdentity.networkOperator }
-            else false
-
-        if (cell.cellIdentity.networkOperator == null)
-            networkOperator?.run { cellsLte.add(cell.toEntity(networkOperator = this)) }
-        else if (isRegistered)
-            cellsLte.add(cell.toEntity(isRegistered = true))
-        else
-            cellsLte.add(cell.toEntity())
-    }
-
-    return cellsLte
+    return allCellInfo.toImprovedLte(
+        defaultNetworkOperator = { networkOperator },
+        onNetworkOperator = { networkOperator = it }
+    )
 }
 
 private val delayHandlers = mutableListOf<Handler>()
 
 @RequiresApi(Build.VERSION_CODES.Q)
-@RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+@RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.READ_PHONE_STATE])
 internal suspend fun TelephonyManager.requestCellLteUpdates(
     executor: Executor,
     updates: Int = 10,
@@ -125,43 +92,27 @@ internal suspend fun TelephonyManager.requestCellLteUpdates(
     onUpdate: (List<CellLte>) -> Unit
 ) = suspendCancellableCoroutine { continuation ->
     var updateCounter = 0
-    var isRegistered: Boolean
     var networkOperator: String? = null
     val delayHandler = Handler(Looper.getMainLooper()).also(delayHandlers::add)
     val cellInfoCallback = object : TelephonyManager.CellInfoCallback() {
+        @SuppressLint("MissingPermission")
         override fun onCellInfo(cellInfo: MutableList<CellInfo>) {
-            val cellsLte = mutableListOf<CellLte>()
-            cellInfo.map { it.toLte() }.forEach {
-                if (it == null) return@forEach
-                val cell = MCellInfoLte(it)
-
-                isRegistered =
-                    if (cell.isRegistered.isTrue || cell.cellIdentity.ci !in arrayOf(null, 0))
-                        true.also { networkOperator = cell.cellIdentity.networkOperator }
-                    else false
-
-                if (cell.cellIdentity.networkOperator == null)
-                    networkOperator?.run { cellsLte.add(cell.toEntity(networkOperator = this)) }
-                else if (isRegistered)
-                    cellsLte.add(cell.toEntity(isRegistered = true))
-                else
-                    cellsLte.add(cell.toEntity())
-            }
+            val cellsLte = cellInfo.toImprovedLte(
+                defaultNetworkOperator = { networkOperator },
+                onNetworkOperator = { networkOperator = it }
+            )
 
             if (cellsLte.isNotEmpty())
                 onUpdate(cellsLte)
-        }
-    }
 
-    fun scheduleNextUpdate() {
-        if (updateCounter < updates)
-            delayHandler.postDelayed({
-                requestCellInfoUpdate(executor, cellInfoCallback)
-                updateCounter++
-                scheduleNextUpdate()
-            }, updateIntervalMillis)
-        else
-            continuation.resume(Unit)
+            if (updateCounter < updates)
+                delayHandler.postDelayed({
+                    requestCellInfoUpdate(executor, this)
+                    updateCounter++
+                }, updateIntervalMillis)
+            else
+                continuation.resume(Unit)
+        }
     }
 
     continuation.invokeOnCancellation {
@@ -169,7 +120,7 @@ internal suspend fun TelephonyManager.requestCellLteUpdates(
         delayHandlers.remove(delayHandler)
     }
 
-    scheduleNextUpdate()
+    requestCellInfoUpdate(executor, cellInfoCallback)
 }
 
 @RequiresApi(Build.VERSION_CODES.Q)

@@ -89,6 +89,7 @@ internal class MCellSignalStrengthLte(
     )
 
     data class CellSignalStrengthLteReflection(
-        @SerializedName("getMiuiLevel") val miuiLevel: Int? = null
+        @SerializedName("getMiuiLevel")
+        val miuiLevel: Int? = null
     )
 }

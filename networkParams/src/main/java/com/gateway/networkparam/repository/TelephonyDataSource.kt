@@ -6,7 +6,8 @@ import com.gateway.networkparam.entity.CellLte
 import com.gateway.networkparam.entity.SignalStrengthLte
 import com.gateway.networkparam.entity.util.NetworkOperator
 
-interface TelephonyDataSource {
+
+internal interface TelephonyDataSource {
     @get:RequiresApi(Build.VERSION_CODES.Q)
     val lastCellsLte: List<CellLte>
 
