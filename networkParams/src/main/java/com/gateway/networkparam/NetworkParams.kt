@@ -5,7 +5,7 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import com.gateway.networkparam.entity.CellLte
 import com.gateway.networkparam.entity.SignalStrengthLte
-import com.gateway.networkparam.entity.util.NetworkOperator
+import com.gateway.networkparam.entity.util.NetworkParamsOperator
 import com.gateway.networkparam.framework.data.TelephonyDataSourceImp
 import com.gateway.networkparam.repository.TelephonyDataSource
 
@@ -18,7 +18,7 @@ class NetworkParams(context: Context): TelephonyDataSource {
 
     @RequiresApi(Build.VERSION_CODES.Q)
     override suspend fun requestCellLteUpdates(
-        networkOperator: NetworkOperator,
+        networkOperator: NetworkParamsOperator,
         updates: Int,
         updateIntervalMillis: Long,
         onUpdate: (List<CellLte>) -> Unit
@@ -34,7 +34,8 @@ class NetworkParams(context: Context): TelephonyDataSource {
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun removeCellLteUpdates() = telephonyDataSource.removeCellLteUpdates()
 
-    override suspend fun getAllCellLte(): List<CellLte> = telephonyDataSource.getAllCellLte()
+    override suspend fun getAllCellLte(networkOperator: NetworkParamsOperator): List<CellLte> =
+        telephonyDataSource.getAllCellLte(networkOperator)
 
     override fun getAllSignalStrengthLte(): List<SignalStrengthLte> =
         telephonyDataSource.getAllSignalStrengthLte()

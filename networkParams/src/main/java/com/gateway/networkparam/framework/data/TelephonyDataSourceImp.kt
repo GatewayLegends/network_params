@@ -7,7 +7,7 @@ import android.telephony.TelephonyManager
 import androidx.annotation.RequiresApi
 import com.gateway.networkparam.entity.CellLte
 import com.gateway.networkparam.entity.SignalStrengthLte
-import com.gateway.networkparam.entity.util.NetworkOperator
+import com.gateway.networkparam.entity.util.NetworkParamsOperator
 import com.gateway.networkparam.framework.util.getAllSubTelephonyManagers
 import com.gateway.networkparam.framework.util.getCellLte
 import com.gateway.networkparam.framework.util.getExecutor
@@ -30,7 +30,7 @@ internal class TelephonyDataSourceImp(
     @SuppressLint("MissingPermission")
     @RequiresApi(Build.VERSION_CODES.Q)
     override suspend fun requestCellLteUpdates(
-        networkOperator: NetworkOperator,
+        networkOperator: NetworkParamsOperator,
         updates: Int,
         updateIntervalMillis: Long,
         onUpdate: (List<CellLte>) -> Unit
@@ -64,10 +64,15 @@ internal class TelephonyDataSourceImp(
             emptyList()
 
     @SuppressLint("MissingPermission")
-    override suspend fun getAllCellLte(): List<CellLte> {
+    override suspend fun getAllCellLte(networkOperator: NetworkParamsOperator): List<CellLte> {
         val list = mutableListOf<CellLte>()
-        allTelephonyManager.forEach {
-            it.getCellLte(context.getExecutor()).map(list::add)
+        allTelephonyManager.forEach { telephonyManager ->
+            if (
+                (networkOperator.value != telephonyManager.simOperator)
+                || telephonyManager.isSim4GSupported.not()
+            ) return@forEach
+
+            telephonyManager.getCellLte(context.getExecutor()).map(list::add)
         }
         return list
     }
