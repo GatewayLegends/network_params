@@ -64,7 +64,7 @@ internal class TelephonyDataSourceImp(
             emptyList()
 
     @SuppressLint("MissingPermission")
-    override suspend fun getAllCellLte(networkOperator: NetworkParamsOperator): List<CellLte> {
+    override suspend fun getCellLte(networkOperator: NetworkParamsOperator): List<CellLte> {
         val list = mutableListOf<CellLte>()
         allTelephonyManager.forEach { telephonyManager ->
             if (
@@ -75,6 +75,29 @@ internal class TelephonyDataSourceImp(
             telephonyManager.getCellLte(context.getExecutor()).map(list::add)
         }
         return list
+    }
+
+    @SuppressLint("MissingPermission")
+    override suspend fun getAllCellLte(): List<CellLte> {
+        val list = mutableListOf<CellLte>()
+        allTelephonyManager.forEach { telephonyManager ->
+            telephonyManager.getCellLte(context.getExecutor()).map(list::add)
+        }
+        return list
+    }
+
+    override fun getSignalStrengthLte(networkOperator: NetworkParamsOperator): SignalStrengthLte? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            allTelephonyManager.map { telephonyManager ->
+                if (
+                    (networkOperator.value != telephonyManager.simOperator)
+                    || telephonyManager.isSim4GSupported.not()
+                ) return@map
+
+                return telephonyManager.getSignalStrengthLte()
+            }
+
+        return null
     }
 
     override fun getAllSignalStrengthLte(): List<SignalStrengthLte> {

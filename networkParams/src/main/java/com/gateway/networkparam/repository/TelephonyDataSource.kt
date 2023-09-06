@@ -22,7 +22,9 @@ internal interface TelephonyDataSource {
     @RequiresApi(Build.VERSION_CODES.Q)
     fun removeCellLteUpdates()
 
-    suspend fun getAllCellLte(networkOperator: NetworkParamsOperator): List<CellLte>
+    suspend fun getAllCellLte(): List<CellLte>
+    suspend fun getCellLte(networkOperator: NetworkParamsOperator): List<CellLte>
 
     fun getAllSignalStrengthLte(): List<SignalStrengthLte>
+    fun getSignalStrengthLte(networkOperator: NetworkParamsOperator): SignalStrengthLte?
 }

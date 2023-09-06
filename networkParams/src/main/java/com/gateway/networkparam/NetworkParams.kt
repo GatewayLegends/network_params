@@ -10,7 +10,7 @@ import com.gateway.networkparam.framework.data.TelephonyDataSourceImp
 import com.gateway.networkparam.repository.TelephonyDataSource
 
 
-class NetworkParams(context: Context): TelephonyDataSource {
+class NetworkParams(context: Context) : TelephonyDataSource {
     private val telephonyDataSource = TelephonyDataSourceImp(context)
 
     override val lastCellsLte: List<CellLte>
@@ -22,7 +22,7 @@ class NetworkParams(context: Context): TelephonyDataSource {
         updates: Int,
         updateIntervalMillis: Long,
         onUpdate: (List<CellLte>) -> Unit
-    )  {
+    ) {
         telephonyDataSource.requestCellLteUpdates(
             networkOperator = networkOperator,
             updates = updates,
@@ -34,9 +34,13 @@ class NetworkParams(context: Context): TelephonyDataSource {
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun removeCellLteUpdates() = telephonyDataSource.removeCellLteUpdates()
 
-    override suspend fun getAllCellLte(networkOperator: NetworkParamsOperator): List<CellLte> =
-        telephonyDataSource.getAllCellLte(networkOperator)
+    override suspend fun getAllCellLte(): List<CellLte> = telephonyDataSource.getAllCellLte()
+    override suspend fun getCellLte(networkOperator: NetworkParamsOperator): List<CellLte> =
+        telephonyDataSource.getCellLte(networkOperator)
 
     override fun getAllSignalStrengthLte(): List<SignalStrengthLte> =
         telephonyDataSource.getAllSignalStrengthLte()
+
+    override fun getSignalStrengthLte(networkOperator: NetworkParamsOperator): SignalStrengthLte? =
+        telephonyDataSource.getSignalStrengthLte(networkOperator)
 }
