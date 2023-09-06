@@ -1,5 +1,6 @@
 package com.gateway.networkparam.repository.util
 
+import android.annotation.SuppressLint
 import android.telephony.*
 import com.gateway.networkparam.entity.*
 import com.gateway.networkparam.entity.CellIdentityLte
@@ -7,6 +8,7 @@ import com.gateway.networkparam.entity.NetworkRegistrationInfo
 import com.gateway.networkparam.entity.ServiceState
 import com.gateway.networkparam.entity.SubscriptionInfo
 import com.gateway.networkparam.entity.enums.*
+import com.gateway.networkparam.entity.util.isTrue
 import com.gateway.networkparam.repository.dto.MCellIdentityLte
 import com.gateway.networkparam.repository.dto.MCellInfoLte
 import com.gateway.networkparam.repository.dto.MCellSignalStrengthLte
@@ -15,16 +17,10 @@ import com.gateway.networkparam.repository.dto.MServiceState
 import com.gateway.networkparam.repository.dto.MSubscriptionInfo
 import com.gateway.networkparam.repository.dto.SubTelephonyManager
 
-internal fun MCellInfoLte.toEntity() = CellLte(
-    cellConnectionStatus = cellConnectionStatus?.value,
-    isRegistered = isRegistered,
-    timeStamp = timeStampMillis,
-    cellIdentityLte = cellIdentity.toEntity(),
-    signalStrengthReport = cellSignalStrengthLte.toEntity()
-)
 
 internal fun MCellInfoLte.toEntity(
-    networkOperator: String
+    isRegistered: Boolean = false,
+    networkOperator: String?
 ) = CellLte(
     cellConnectionStatus = cellConnectionStatus?.value,
     isRegistered = isRegistered,
@@ -33,33 +29,8 @@ internal fun MCellInfoLte.toEntity(
     signalStrengthReport = cellSignalStrengthLte.toEntity(networkOperator)
 )
 
-internal fun MCellInfoLte.toEntity(
-    isRegistered: Boolean
-) = CellLte(
-    cellConnectionStatus = cellConnectionStatus?.value,
-    isRegistered = isRegistered,
-    timeStamp = timeStampMillis,
-    cellIdentityLte = cellIdentity.toEntity(),
-    signalStrengthReport = cellSignalStrengthLte.toEntity()
-)
-
-internal fun MCellSignalStrengthLte.toEntity() = SignalStrengthLte(
-    rsrp = rsrp,
-    rsrq = rsrq,
-    rssi = rssi,
-    rssnr = rssnr,
-    cqi = cqi,
-    cqiTableIndex = cqiTableIndex,
-    timingAdvance = timingAdvance,
-    dbm = dbm,
-    asuLevel = asuLevel,
-    level = level,
-    miuiLevel = miuiLevel,
-    networkOperator = null
-)
-
 internal fun MCellSignalStrengthLte.toEntity(
-    networkOperator: String
+    networkOperator: String?
 ) = SignalStrengthLte(
     rsrp = rsrp,
     rsrq = rsrq,
@@ -89,7 +60,7 @@ internal fun MCellIdentityLte.toEntity() = CellIdentityLte(
 )
 
 internal fun MCellIdentityLte.toEntity(
-    networkOperator: String
+    networkOperator: String?
 ) = CellIdentityLte(
     ci = ci,
     earfcn = earfcn,
@@ -265,3 +236,43 @@ fun CellInfo.toLte() = if (this is CellInfoLte) this else null
 fun CellSignalStrength.toLte() = if (this is CellSignalStrengthLte) this else null
 
 fun CellIdentity.toLte() = if (this is android.telephony.CellIdentityLte) this else null
+
+fun List<CellInfo>.toImprovedLte(
+    defaultNetworkOperator: () -> String?,
+    onNetworkOperator: (String?) -> Unit
+): List<CellLte> {
+    val cellsLte = mutableListOf<CellLte>()
+    mapNotNull { it.toLte() }.map(::MCellInfoLte).forEach { cell ->
+        var networkOperator: String? = defaultNetworkOperator()
+        val isRegistered =
+            if (cell.isRegistered.isTrue || cell.cellIdentity.ci !in arrayOf(null, 0))
+                true.also { networkOperator = cell.cellIdentity.networkOperator }
+            else
+                false
+
+        onNetworkOperator(networkOperator)
+
+        cellsLte.update(
+            cell.toEntity(
+                isRegistered = isRegistered,
+                networkOperator = networkOperator
+            )
+        )
+    }
+    return cellsLte
+}
+
+fun MutableList<CellLte>.update(value: CellLte) {
+    val existsCellIndex =
+        indexOf(firstOrNull { it.cellIdentityLte?.pci == value.cellIdentityLte?.pci })
+
+    if (existsCellIndex != -1)
+        this[existsCellIndex] = value
+    else
+        add(value)
+}
+
+val TelephonyManager.isSim4GSupported: Boolean
+    @SuppressLint("MissingPermission")
+    get() = (simState == TelephonyManager.SIM_STATE_READY)
+            && (dataNetworkType == TelephonyManager.NETWORK_TYPE_LTE)
